@@ -3,11 +3,10 @@ package org.sv.go;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.io.*;
 import java.util.Vector;
 
-/**
- * Created by Jainrong on 2017/03/29.
- */
+
 public class Chessboard extends JPanel {
     //  默认的棋盘方格长度及数目
     public static final int defaultGridLen = 22, defaultGridNum = 19;
@@ -20,16 +19,17 @@ public class Chessboard extends JPanel {
     private Vector chessman;
     private int alreadyNum;             // 已下数目
     private int currentTurn;            // 轮到谁下
-    private int gridNum, gridLen;       // 方格长度及数目
-    private int chessmanLength;         // 棋子的直径
-    private Chesspoint[][] map;         // 在棋盘上的所有棋子
+    private int gridNum, gridLen;       // 方格长度及数目 9 46，13 32，19 22
+    private int chessmanLength;         // 棋子的直径 41，28，19
+    private Chesspoint[][] map;         // 在棋盘上的所有棋子  及以上
     private Image offScreen;            //用来绘制棋盘
     private Graphics offGrid;           //用来绘制方格和棋子
-    private int size;                   // 棋盘的宽度及高度
+    private int size;                   // 棋盘的宽度及高度 444
     private int top = 13, left = 13;    // 棋盘上边及左边的边距
     //Point类表示 (x,y) 坐标空间中的位置的点，以整数精度指定。
-    private Point mouseClick;           // 鼠标的位置，即map数组中的下标
+    private Point mouseClick;           // 鼠标的位置，即map数组中的下标 null
     private ControlPanel controlPanel;  // 控制面板
+    private Strategy strategy=new GoStrategy();
 
     //获得控制板的距离
     public int getWidth() {
@@ -46,7 +46,7 @@ public class Chessboard extends JPanel {
         gridLen = defaultGridLen;                       //方格长度为22
         chessmanLength = gridLen * 9 / 10;              //棋子直径为22*9/10
         size = 2 * left + gridNum * gridLen;            //正方形棋盘边长为2*13+19*22
-        addMouseListener(new PalyChess());              //注册鼠标监听器,监听鼠标按下事件
+        addMouseListener(new PlayChess());              //注册鼠标监听器,监听鼠标按下事件
         addMouseMotionListener(new mousePosition());    //注册鼠标监听器,监听鼠标移动事件
         setLayout(new BorderLayout());                  //设置布局模式
         controlPanel = new ControlPanel();              //创建控制面板
@@ -124,7 +124,7 @@ public class Chessboard extends JPanel {
 
 
     /***下棋子,这是对鼠标按下事件的处理类,是内部类***/
-    class PalyChess extends MouseAdapter { // 放一颗棋子
+    class PlayChess extends MouseAdapter { // 放一颗棋子
         //鼠标按键在组件上按下时调用
         public void mousePressed(MouseEvent evt) {
             int xoff = left / 2;
@@ -157,11 +157,51 @@ public class Chessboard extends JPanel {
             chessman.addElement(goPiece);
             //已下棋子数目自加
             alreadyNum++;
+
+            if(strategy.playChess(x,y,goPiece)){
+                return;
+            }
+//            //***判断在[x,y]落子后，是否可以提掉对方的子
+//            take(x, y);
+//            //***判断是否挤死了自己，若是则已落的子无效
+//            if (allDead(goPiece).size() != 0) {
+//                map[x][y] = null;
+//                repaint();//重绘此组件。
+//                controlPanel.setMsg("无效下棋");//控制面板提示"无效下棋"
+//                //***back***
+//                chessman.removeElement(goPiece);//移除棋子
+//                alreadyNum--;//已下棋子数目自减
+//                if (currentTurn == Chesspoint.black) {
+//                    currentTurn = Chesspoint.white;//轮到白子下
+//                } else {
+//                    currentTurn = Chesspoint.black;//轮到黑子下
+//                }
+//                return;
+//            }
+
             if (currentTurn == Chesspoint.black) {
                 currentTurn = Chesspoint.white;
             } else {
                 currentTurn = Chesspoint.black;
             }
+
+            mouseClick = null;
+            // 更新控制面板
+            controlPanel.setLabel();
+            //更新标签
+        }
+
+        public void mouseExited(MouseEvent evt) {// 鼠标退出时，清除将要落子的位置
+            mouseClick = null;
+            repaint();//重绘
+        }
+    }
+
+    private class Strategy{
+        public boolean playChess(int x, int y, Chesspoint goPiece){return false;}
+    }
+    private class GoStrategy extends Strategy{
+        public boolean playChess(int x, int y, Chesspoint goPiece){
             //***判断在[x,y]落子后，是否可以提掉对方的子
             take(x, y);
             //***判断是否挤死了自己，若是则已落的子无效
@@ -177,18 +217,126 @@ public class Chessboard extends JPanel {
                 } else {
                     currentTurn = Chesspoint.black;//轮到黑子下
                 }
-                return;
+//                return false;
             }
-
-            mouseClick = null;
-            // 更新控制面板
-            controlPanel.setLabel();
-            //更新标签
+            return false;
         }
-
-        public void mouseExited(MouseEvent evt) {// 鼠标退出时，清除将要落子的位置
-            mouseClick = null;
-            repaint();//重绘
+    }
+    private class FiveStrategy extends Strategy{
+        public boolean playChess(int x, int y, Chesspoint goPiece){
+            //当前行
+            int minX=x-4;
+            int maxX=x+4;
+            if(minX<1) minX=1;
+            if(maxX>Chessboard.this.gridNum) maxX=Chessboard.this.gridNum;
+            int sum=0;
+            for (int i=minX;i<=maxX;i++){
+                if(Chessboard.this.map[i][y]==null){
+                    continue;
+                }
+                int piece=Chessboard.this.map[i][y].color;
+                if(piece==Chessboard.this.currentTurn){
+                    sum++;
+                    if(sum==5) {
+                        if (currentTurn==Chesspoint.black){
+                            controlPanel.setMsg("黑子获胜！");
+                            JOptionPane.showMessageDialog(null,"黑子获胜！","消息提示",JOptionPane.WARNING_MESSAGE);
+                            startGame();
+                        }else{
+                            controlPanel.setMsg("白子获胜！");
+                            JOptionPane.showMessageDialog(null,"白子获胜！","消息提示",JOptionPane.WARNING_MESSAGE);
+                            startGame();
+                        }
+                        return true;
+                    }
+                }else{
+                    sum=0;
+                }
+            }
+            //当前列
+            int minY=y-4;
+            int maxY = y+4;
+            if (minY<0) minY=0;
+            if(maxY>Chessboard.this.gridNum) maxY=Chessboard.this.gridNum;
+            sum=0;
+            for (int i=minY; i<=maxY; i++) {
+                if(Chessboard.this.map[x][i]==null){
+                    continue;
+                }
+                int piece=Chessboard.this.map[x][i].color;
+                if(piece==Chessboard.this.currentTurn){
+                    sum++;
+                    if(sum==5){
+                        if (currentTurn==Chesspoint.black){
+                            controlPanel.setMsg("黑子获胜！");
+                            JOptionPane.showMessageDialog(null,"黑子获胜！","消息提示",JOptionPane.WARNING_MESSAGE);
+                            startGame();
+                        }else{
+                            controlPanel.setMsg("白子获胜！");
+                            JOptionPane.showMessageDialog(null,"白子获胜！","消息提示",JOptionPane.WARNING_MESSAGE);
+                            startGame();
+                        }
+                        return true;
+                    }
+                }else{
+                    sum=0;
+                }
+            }
+            //左斜
+            sum=0;
+            for(int i=-4;i<=4;i++){
+                if(x+i>0 && x+i<=Chessboard.this.gridNum && y+i>=0 && y+i<=Chessboard.this.gridNum) {
+                    if(Chessboard.this.map[x+i][y+i]==null){
+                        continue;
+                    }
+                    int piece=Chessboard.this.map[x+i][y+i].color;
+                    if(piece==Chessboard.this.currentTurn){
+                        sum++;
+                        if(sum==5){
+                            if (currentTurn==Chesspoint.black){
+                                controlPanel.setMsg("黑子获胜！");
+                                JOptionPane.showMessageDialog(null,"黑子获胜！","消息提示",JOptionPane.WARNING_MESSAGE);
+                                startGame();
+                            }else{
+                                controlPanel.setMsg("白子获胜！");
+                                JOptionPane.showMessageDialog(null,"白子获胜！","消息提示",JOptionPane.WARNING_MESSAGE);
+                                startGame();
+                            }
+                            return true;
+                        }
+                    }else{
+                        sum=0;
+                    }
+                }
+            }
+            //右斜
+            sum=0;
+            for (int i=-4;i<=4;i++){
+                if(x+i>0 && x+i<=Chessboard.this.gridNum && y-i>=0 && y-i<=Chessboard.this.gridNum){
+                    if(Chessboard.this.map[x+i][y-i]==null){
+                        continue;
+                    }
+                    int piece=Chessboard.this.map[x+i][y-i].color;
+                    if(piece==Chessboard.this.currentTurn){
+                        sum++;
+                        if(sum==5){
+                            if (currentTurn==Chesspoint.black){
+                                controlPanel.setMsg("黑子获胜！");
+                                JOptionPane.showMessageDialog(null,"黑子获胜！","消息提示",JOptionPane.WARNING_MESSAGE);
+                                startGame();
+                            }else{
+                                controlPanel.setMsg("白子获胜！");
+                                JOptionPane.showMessageDialog(null,"白子获胜！","消息提示",JOptionPane.WARNING_MESSAGE);
+                                startGame();
+                            }
+                            return true;
+                        }
+                    }else{
+                        sum=0;
+                    }
+                }
+            }
+            return false;
         }
     }
 
@@ -355,33 +503,119 @@ public class Chessboard extends JPanel {
         repaint();//重绘此组件。
     }
 
-    //悔棋后再次前进
-    public void forward() {
-        if (alreadyNum == chessman.size()) {
-            controlPanel.setMsg("不能前进");//设置controlPanel的消息对象"不能前进"
+    //围棋虚着
+    public void skip(){
+        if(Chessboard.this.strategy instanceof FiveStrategy) {
+            JOptionPane.showMessageDialog(null,"五子棋无法虚着！","消息提示",JOptionPane.WARNING_MESSAGE);
             return;
         }
-        Object obj = chessman.elementAt(alreadyNum++);
-        Chesspoint goPiece;
-        //instanceof是Java的一个二元操作符，和==，>，<是同一类东西。由于它是由字母组成的，所以也是Java的保留关键字。
-        //它的作用是测试它左边的对象是否是它右边的类的实例，返回boolean类型的数据。
-        if (obj instanceof Chesspoint) {
-            goPiece = (Chesspoint) (obj);
-            map[goPiece.x][goPiece.y] = goPiece;
+        //alreadyNum不变
+        if (currentTurn == Chesspoint.black) {
+            currentTurn = Chesspoint.white;
         } else {
-            Vector v = (Vector) obj;
-            goPiece = (Chesspoint) (v.elementAt(v.size() - 1));//返回v.size() - 1)处的组件赋给goPiece。
-            map[goPiece.x][goPiece.y] = goPiece;
+            currentTurn = Chesspoint.black;
         }
-        if (goPiece.color == Chesspoint.black) {
-            currentTurn = Chesspoint.white;//到白子下
-        } else {
-            currentTurn = Chesspoint.black;//到黑子下
-        }
-        take(goPiece.x, goPiece.y);//踢子
-        controlPanel.setLabel();//更新控制面板
-        repaint();//重绘组件
+        mouseClick = null;
+        // 更新控制面板
+        controlPanel.setLabel();
+        //更新标签
     }
+
+    //投负
+    public void giveIn(){
+        if (currentTurn==Chesspoint.black){
+            controlPanel.setMsg("白子获胜！");
+            JOptionPane.showMessageDialog(null,"白子获胜！","消息提示",JOptionPane.WARNING_MESSAGE);
+            startGame();
+        }else{
+            controlPanel.setMsg("黑子获胜！");
+            JOptionPane.showMessageDialog(null,"黑子获胜！","消息提示",JOptionPane.WARNING_MESSAGE);
+            startGame();
+        }
+    }
+
+    //保存局面
+    public void save(){
+        try{
+            File f = new File("manageChess.txt");
+            f.createNewFile();
+            BufferedWriter out=new BufferedWriter(new FileWriter(f));
+            out.write(this.chessman.toString()+"\r\n"+this.alreadyNum+"\r\n"+this.currentTurn+"\r\n"+this.gridNum+"\r\n"+this.gridLen+"\r\n"+this.chessmanLength);
+            //out.write(this.map.toString());
+            out.flush();
+            out.close();
+            JOptionPane.showMessageDialog(null,"保存成功！","消息提示",JOptionPane.WARNING_MESSAGE);	//消息对话框
+//            controlPanel.setMsg("保存成功");
+        }catch(Exception e){
+            e.printStackTrace();
+        }
+        //System.out.println(this.map);
+    }
+    
+    public void recover(){
+        try{
+            String pathname="manageChess.txt";
+            File filename=new File(pathname);
+            InputStreamReader reader=new InputStreamReader(new FileInputStream(filename));
+            BufferedReader br=new BufferedReader(reader);
+
+            this.chessman=new Vector();
+            String[] lst=br.readLine().substring(1).split(", ");
+
+            for(String point : lst){
+                String[] info = point.split(":");
+                int color=0;
+                if(info[1].charAt(0)=='w')
+                    color=1;
+                String[] coordinates=info[0].substring(1,info[0].length()-1).split(",");
+                Chesspoint p= new Chesspoint(Integer.valueOf(coordinates[0]),Integer.valueOf(coordinates[1]),color);
+                chessman.addElement(p);
+            }
+            this.alreadyNum=Integer.valueOf(br.readLine());
+            this.currentTurn=Integer.valueOf(br.readLine());
+            this.gridNum=Integer.valueOf(br.readLine());
+            this.gridLen=Integer.valueOf(br.readLine());
+            this.chessmanLength=Integer.valueOf(br.readLine());
+            this.map=new Chesspoint[this.gridNum+1][this.gridNum+1];
+            for(Object point:this.chessman){
+                Chesspoint p=(Chesspoint)point;
+                map[p.x][p.y]=p;
+            }
+            JOptionPane.showMessageDialog(null,"覆盖并恢复成功！","消息提示",JOptionPane.WARNING_MESSAGE);	//消息对话框
+            repaint();
+        }catch (IOException e){
+            throw new RuntimeException(e);
+        }
+    }
+
+
+//    //悔棋后再次前进
+//    public void forward() {
+//        if (alreadyNum == chessman.size()) {
+//            controlPanel.setMsg("不能前进");//设置controlPanel的消息对象"不能前进"
+//            return;
+//        }
+//        Object obj = chessman.elementAt(alreadyNum++);
+//        Chesspoint goPiece;
+//        //instanceof是Java的一个二元操作符，和==，>，<是同一类东西。由于它是由字母组成的，所以也是Java的保留关键字。
+//        //它的作用是测试它左边的对象是否是它右边的类的实例，返回boolean类型的数据。
+//        if (obj instanceof Chesspoint) {
+//            goPiece = (Chesspoint) (obj);
+//            map[goPiece.x][goPiece.y] = goPiece;
+//        } else {
+//            Vector v = (Vector) obj;
+//            goPiece = (Chesspoint) (v.elementAt(v.size() - 1));//返回v.size() - 1)处的组件赋给goPiece。
+//            map[goPiece.x][goPiece.y] = goPiece;
+//        }
+//        if (goPiece.color == Chesspoint.black) {
+//            currentTurn = Chesspoint.white;//到白子下
+//        } else {
+//            currentTurn = Chesspoint.black;//到黑子下
+//        }
+//        take(goPiece.x, goPiece.y);//踢子
+//        controlPanel.setLabel();//更新控制面板
+//        repaint();//重绘组件
+//    }
 
     //重新开始游戏
     public void startGame() {
@@ -398,9 +632,15 @@ public class Chessboard extends JPanel {
         protected Label lblTurn = new Label("", Label.CENTER);//创建标签对象
         protected Label lblNum = new Label("", Label.CENTER);//创建标签对象
         protected Label lblMsg = new Label("", Label.CENTER);//创建标签对象
+        protected Label lblSize = new Label("",Label.CENTER);
         protected Choice choice = new Choice();//创建一个新的选择菜单。
         protected Button back = new Button("悔 棋");//创建"悔棋"按钮
         protected Button start = new Button("重新开局");//创建"重新开局"按钮
+        protected Button skip = new Button("虚 着");
+        protected Button giveIn = new Button("投 负");
+        protected Button save = new Button("保存局面");
+        protected Button recover = new Button("恢复局面");
+        protected Button chooseSize = new Button("棋盘大小");
 
         public int getWidth() {
             return 45;//返回组件的当前宽度45。
@@ -415,18 +655,30 @@ public class Chessboard extends JPanel {
             setSize(this.getWidth(), this.getHeight());//设置控制面板大小
             setLayout(new GridLayout(12, 1, 0, 10));//设置布局管理器
             setLabel();//设置标签
-            choice.add("19 X 19");//添加"19X19"进选择按钮
-            choice.add("13 X 13");//添加“13X13”进选择按钮
-            choice.add(" 9 X 9 ");//添加“9X9”进选择按钮
-            choice.addItemListener(new ChessAction());//在选择按钮中添加监听器
+            choice.add("围棋");
+            choice.add("五子棋");
+            choice.addItemListener(new SetGameType());//在选择按钮中添加监听器
+            add(choice);
             add(lblTurn);//添加lblTurn标签对象
             add(lblNum);//添加lblNum标签对象
             add(start);//添加开局按钮
-            add(choice);//添加选择菜单
+
+            add(lblSize);
+            add(chooseSize);
             add(lblMsg);//添加lblMsg标签对象
+            add(save);//保存局面
+            add(recover);
             add(back);//添加“悔棋”按钮
+            add(giveIn);//投负
+            add(skip);//围棋虚着
+
             back.addActionListener(new BackChess());//给悔棋按钮,添加事件监听器
             start.addActionListener(new BackChess());//给重新开始按钮,添加事件监听器
+            skip.addActionListener(new ForwardChess());
+            giveIn.addActionListener(new ForwardChess());
+            save.addActionListener(new ManageChess());
+            recover.addActionListener(new ManageChess());
+            chooseSize.addActionListener(new SetBoardSize());
             setBackground(new Color(120, 120, 200));//设置背景颜色
         }
 
@@ -434,7 +686,7 @@ public class Chessboard extends JPanel {
             return new Insets(5, 5, 5, 5);
         }
 
-        //悔棋
+        //悔棋或重开（棋局后退）
         private class BackChess implements ActionListener {
             public void actionPerformed(ActionEvent evt) {
                 if (evt.getSource() == back)//如果鼠标点击"悔棋"按钮，则返回上一步（悔棋）
@@ -443,12 +695,50 @@ public class Chessboard extends JPanel {
                     Chessboard.this.startGame();
             }
         }
+        //虚着或投负（棋局前进）
+        private class ForwardChess implements ActionListener{
+            public void actionPerformed(ActionEvent evt){
+                if (evt.getSource()==skip){
+                    Chessboard.this.skip();
+                } else if (evt.getSource()==giveIn) {
+                    Chessboard.this.giveIn();
+                }
+            }
+        }
+        //保存或恢复局面（棋局管理）
+        private class ManageChess implements ActionListener{
+            public void actionPerformed(ActionEvent evt){
+                if (evt.getSource()==save) {
+                    Chessboard.this.save();
+                }
+                else if (evt.getSource()==recover) {
+                    Chessboard.this.recover();
+                }
+            }
+        }
 
-        //下棋动作
-        private class ChessAction implements ItemListener {
-            public void itemStateChanged(ItemEvent evt) {
-                String s = (String) (evt.getItem());
-                int rects = Integer.parseInt(s.substring(0, 2).trim());//这是重新计算所要格子数.
+//        private class Settings implements ActionListener{
+//            public void actionPerformed(ActionEvent evt){
+//                if (evt.getSource()==chooseSize) {
+//                    String size = JOptionPane.showInputDialog(null,"请棋盘大小，范围是[8,19]：","输入",JOptionPane.WARNING_MESSAGE);		//输入对话框
+//                    System.out.println(size);
+//                }
+//            }
+//        }
+
+        //设置棋盘大小
+//        private class SetBoardSize implements ItemListener {
+        private class SetBoardSize implements ActionListener {
+//            public void itemStateChanged(ItemEvent evt) {
+            public void actionPerformed(ActionEvent evt) {
+                String s = JOptionPane.showInputDialog(null,"请棋盘大小，范围是[8,19]：","输入",JOptionPane.WARNING_MESSAGE);		//输入对话框
+                int rects=Integer.parseInt(s);
+                if(rects<8 || rects>19){
+                    JOptionPane.showMessageDialog(null,"棋盘大小不符合要求！","消息提示",JOptionPane.WARNING_MESSAGE);	//消息对话框
+                    return;
+                }
+//                String s = (String) (evt.getItem());
+//                int rects = Integer.parseInt(s.substring(0, 2).trim());//这是重新计算所要格子数.
                 if (rects != Chessboard.this.gridNum) {
                     /**这里出现了错误,致使出现了能放大棋盘而不能缩小的错误//这里原来是gridLen * defaultGridNum,
                     现在将其改为defaultGridLen * defaultGridNum就可以了,主要是这是在计算棋盘长度时出现了错误*/
@@ -457,6 +747,18 @@ public class Chessboard extends JPanel {
                     Chessboard.this.gridNum = rects;
                     Chessboard.this.startGame();
                 }
+            }
+        }
+
+        private class SetGameType implements ItemListener{
+            public void itemStateChanged(ItemEvent evt) {
+                String s = (String) (evt.getItem());
+                if("围棋".equals(s)){
+                    Chessboard.this.strategy=new GoStrategy();
+                }else if("五子棋".equals(s)){
+                    Chessboard.this.strategy=new FiveStrategy();
+                }
+                startGame();
             }
         }
 
@@ -472,6 +774,7 @@ public class Chessboard extends JPanel {
             lblNum.setForeground(Chessboard.this.currentTurn == Chesspoint.black ? Color.black : Color.white);
             //将该标签设置为空文本
             lblMsg.setText("");
+            lblSize.setText("大小"+Chessboard.this.gridNum+"×"+Chessboard.this.gridNum);
         }
 
         public void setMsg(String msg) {// 提示信息

@@ -3,14 +3,12 @@ package org.sv.go;
 import javax.swing.*;
 import java.awt.*;
 
-/**
- * Created by Jianrong on 2017/03/29.
- */
+
 public class Chess extends JFrame {
     Chessboard goBoard = new Chessboard();//初始化外观
 
     public Chess() {
-        this.setTitle("SvGO");                  //设置标题为“SvGO”
+        this.setTitle("棋类对战系统");                  //设置标题为“SvGO”
         this.setLayout(new BorderLayout());     //设置布局管理器
         this.setSize(goBoard.getSize());        //设置大小
         this.add(goBoard, "Center"); //添加棋盘面板并居中

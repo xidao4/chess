@@ -1,8 +1,6 @@
 package org.sv.go;
 
-/**
- * Created by Jianrong on 2017/03/29.
- */
+
 class Chesspoint {
     public static int black = 0, white = 1;
     int x, y;
